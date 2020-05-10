@@ -7,7 +7,7 @@ use failure::{Error, Fail, ResultExt};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 #[derive(Debug, Fail)]
-pub enum EntrError {
+enum EntrError {
     #[fail(display = "No files or dirs to watch")]
     NoFilesToWatch,
 }
@@ -19,7 +19,7 @@ pub enum EntrError {
     author = "Patrick Haller <patrickhaller40@googlemail.com>"
 )]
 #[clap(setting = clap::AppSettings::ArgRequiredElseHelp)]
-pub struct Entr {
+struct Entr {
     #[clap(short, about = "Clear screen before executing utility")]
     clear: bool,
 
@@ -29,7 +29,10 @@ pub struct Entr {
     #[clap(short, about = "Watch for file changes recursively")]
     recursive: bool,
 
-    #[clap(short, about = "Watch for file changes recursively")]
+    #[clap(
+        short,
+        about = "Evaluate the first argument using the interpreter specified by the SHELL environment variable"
+    )]
     use_shell: bool,
 
     utility: Vec<String>,
@@ -58,7 +61,7 @@ impl Entr {
         let files: Vec<&str> = buf.trim().split('\n').filter(|s| !s.is_empty()).collect();
 
         if files.is_empty() {
-            Err(EntrError::NoFilesToWatch)?
+            return Err(EntrError::NoFilesToWatch.into());
         }
 
         let recursive_mode = if self.recursive {
@@ -85,11 +88,11 @@ impl Entr {
 
         loop {
             match rx.recv() {
-                Ok(Ok(e)) => match e.kind {
-                    // Ignore other event than a file modification
-                    notify::EventKind::Modify(_) => self.run_utility()?,
-                    _ => {}
-                },
+                Ok(Ok(e)) => {
+                    if let notify::EventKind::Modify(_) = e.kind {
+                        self.run_utility()?
+                    }
+                }
                 Ok(Err(e)) => Err(e).with_context(|_| "Could not determine event".to_string())?,
                 Err(e) => Err(e).with_context(|_| "Error watching files".to_string())?,
             }
@@ -98,31 +101,26 @@ impl Entr {
 
     /// Get the sytem's shell command string
     fn get_shell_cmd() -> Vec<String> {
-        if cfg!(windows) {
-            vec!["cmd".to_string(), "/c".to_string()]
-        } else {
-            // Assume GNU
-            let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-            vec![shell, "-c".to_string()]
-        }
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        vec![shell, "-c".to_string()]
     }
 
     /// Clear the terminal screen
     fn clear_term_screen(&self) -> Result<(), Error> {
-        Command::new("clear")
-            .status()
-            .or_else(|_| Command::new("cmd").args(&["/c", "cls"]).status())?;
+        Command::new("clear").status()?;
         Ok(())
     }
 
-    /// Run the provided utility as
+    ///
+    /// Run the provided utility and clear screen before hand
+    /// if provided through argument flag
+    ///
     fn run_utility(&self) -> Result<(), Error> {
         if self.clear {
             self.clear_term_screen()
                 .with_context(|_| "Failed to clear terminal screen".to_string())?;
         }
 
-        println!("Ran utility");
         Command::new(&self.utility[0])
             .args(&self.utility[1..])
             .spawn()
@@ -131,6 +129,7 @@ impl Entr {
         Ok(())
     }
 }
+
 fn main() -> Result<(), Error> {
     let entr = Entr::parse();
     entr.run()?;

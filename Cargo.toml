@@ -1,8 +1,11 @@
 [package]
-name = "entr"
+name = "entrs"
 version = "0.1.0"
 authors = ["Patrick Haller <patrickhaller40@googlemail.com>"]
 edition = "2018"
+description = "Run arbitrary commands when files change powered by Rust!"
+license = "MIT"
+repository = "https://github.com/HallerPatrick/entrs.git"
 
 
 [dependencies]

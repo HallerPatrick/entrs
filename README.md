@@ -21,6 +21,16 @@ cargo build --release
 
 ```
 
+### Cargo
+
+```
+cargo install entrs
+```
+
+### Pre-Build Binary
+
+Can be found in Releases
+
 ## Usage
 
 ```
